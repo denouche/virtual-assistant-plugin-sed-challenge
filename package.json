@@ -1,0 +1,25 @@
+{
+  "name": "virtual-assistant-plugin-sed-challenge",
+  "version": "0.1.0",
+  "description": "This plugin allow your chatbot to organize sed challenges",
+  "main": "index.js",
+  "dependencies": {
+    "child-process-promise": "^2.2.0",
+    "fs-extra": "^1.0.0",
+    "javascript-state-machine": "^2.3.5",
+    "lodash": "^4.17.3",
+    "virtual-assistant": ">=0.11.0"
+  },
+  "devDependencies": {
+    "standard-version": "^4.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:denouche/virtual-assistant-plugin-sed-challenge.git"
+  },
+  "author": "Antoine Leveugle",
+  "license": "ISC",
+  "scripts": {
+    "release": "standard-version && git push --follow-tags origin HEAD && npm publish"
+  }
+}
