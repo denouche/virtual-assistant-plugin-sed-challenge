@@ -1,6 +1,6 @@
 {
   "name": "virtual-assistant-plugin-sed-challenge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "This plugin allow your chatbot to organize sed challenges",
   "main": "index.js",
   "dependencies": {
