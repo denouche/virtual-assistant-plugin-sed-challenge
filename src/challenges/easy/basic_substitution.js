@@ -19,6 +19,6 @@ module.exports = {
         output: output
     },
     sedOptions: [
-    	// '-r'
+    	// '-r', '-n'
     ]
 };

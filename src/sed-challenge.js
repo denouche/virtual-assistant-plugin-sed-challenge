@@ -67,7 +67,8 @@ class SedChallenge extends AssistantFeature {
         //  model: {
         //    players: {
         //      'USERID': {
-        //        bestAnswer: 'regex',
+        //        bestScore: 0 // number of valid lines best answer
+        //        bestAnswer: 'script',
         //        tries: 0, // number of tries
         //        win: 1
         //      }
@@ -112,7 +113,7 @@ class SedChallenge extends AssistantFeature {
 
     _getGame() {
         if(!this.context.model.currentGame) {
-            var gameName = ConfigurationService.get('sedchallenge.game');
+            let gameName = ConfigurationService.get('sedchallenge.game');
             this.context.model.currentGame = undefined;
             try {
                 this.context.model.currentGame = require(path.join(__dirname, `challenges/${gameName}.js`));
@@ -136,9 +137,11 @@ class SedChallenge extends AssistantFeature {
     }
 
     getPlayersArray() {
-        var playersArray = [];
+        let playersArray = [];
         _.forOwn(this.context.model.players, function(player, playerId) {
-            playersArray.push(_.assignIn(_.cloneDeep(player), {playerId: playerId}));
+            if(player.bestScore !== undefined) {
+                playersArray.push(_.assignIn(_.cloneDeep(player), {playerId: playerId}));
+            }
         });
         return playersArray;
     }
@@ -154,20 +157,18 @@ class SedChallenge extends AssistantFeature {
         let filename = this._generateRandomFilename(),
             fullTempFilePath = path.join('/tmp/', filename);
         fs.writeFileSync(fullTempFilePath, sedScript);
-        return spawn('sed', ['-f', fullTempFilePath, '--version'], { capture: [ 'stderr' ]})
+        return spawn('sed', _.concat(this._getGame().sedOptions, '-f', fullTempFilePath, '--version'), { capture: [ 'stderr' ]})
             .then(() => {
                 // No error in sed script, let's apply to the input
                 return spawn('echo', ['-n', input], { capture: [ 'stdout', 'stderr' ]});
             })
             .then((input) => {
-                console.log('input: ', input.stdout.toString());
                 let sed = spawn('sed', _.concat(this._getGame().sedOptions, '-f', fullTempFilePath), { capture: [ 'stdout', 'stderr' ]});
                 sed.childProcess.stdin.write(new Buffer(input.stdout.toString()));
                 sed.childProcess.stdin.end();
                 return sed;
             })
             .then((output) => {
-                console.log('output: ', output.stdout.toString());
                 fs.removeSync(fullTempFilePath);
                 return output.stdout.toString();
             })
@@ -177,8 +178,12 @@ class SedChallenge extends AssistantFeature {
             });
     }
 
+    _getGameSplitted(game) {
+        return game.split(/(?<=\n)/);
+    }
+
     getGameToDisplay(sedScript) {
-        var toSend = [],
+        let toSend = [],
             game = this._getGame();
 
         toSend.push(game.subject);
@@ -200,11 +205,22 @@ class SedChallenge extends AssistantFeature {
         
         if(sedScript) {
             return this._evaluateSedScript(game.game.input, sedScript)
-                .then(function(output) {
+                .then((output) => {
                     let valid = game.game.output === output;
+
+                    let wantedOutputLineArray = this._getGameSplitted(game.game.output),
+                        outputLineArray = this._getGameSplitted(output),
+                        equalsLinesCount = 0;
+                    _.forEach(wantedOutputLineArray, function(value, i) {
+                        if(i < outputLineArray.length && value === outputLineArray[i]) {
+                            equalsLinesCount++;
+                        }
+                    });
                     if(!valid) {
                         toSend.push("\n\nMalheureusement la bonne réponse n'est pas :");
+                        toSend.push('```');
                         toSend.push(sedScript);
+                        toSend.push('```');
                     }
                     toSend.push("Ce script a donné l'output suivant :");
                     toSend.push('```');
@@ -212,10 +228,11 @@ class SedChallenge extends AssistantFeature {
                     toSend.push('```');
                     return {
                         toSend: toSend,
-                        valid: valid
+                        valid: valid,
+                        validCount: equalsLinesCount
                     };
                 })
-                .catch(function(error) {
+                .catch((error) => {
                     toSend.push('\n')
                     toSend.push("Une erreur est survenue lors de l'évaluation de votre script sed:")
                     toSend.push(error.stderr);
@@ -232,7 +249,7 @@ class SedChallenge extends AssistantFeature {
         });
     }
 
-    getScoreBoard() {
+    _getScoreBoard() {
         let playersArray = this.getPlayersArray(),
             topCount = 10;
         if(ConfigurationService.get('sedchallenge.scoreboadSize') !== undefined
@@ -245,19 +262,21 @@ class SedChallenge extends AssistantFeature {
             }
         }
         let bestPlayersByScore = _.chain(playersArray)
-            .orderBy(['win'], ['asc'])
+            .orderBy(['win', 'bestScore'], ['asc', 'desc'])
             .slice(0, topCount)
             .value();
         return bestPlayersByScore;
     }
 
     displayScoreboard(channelId) {
-        var toSend = [],
-            bestPlayersByScore = this.getScoreBoard();
+        let toSend = [],
+            game = this._getGame().game,
+            gameLength = this._getGameSplitted(game.input).length,
+            bestPlayersByScore = this._getScoreBoard();
         if(bestPlayersByScore.length > 0) {
             toSend.push('Voici le tableau de score actuel :');
             _.forEach(bestPlayersByScore, function(p) {
-                toSend.push('• ' + '<@' + p.playerId + '> : ' + p.tries + ' tentative' + (p.tries>1?'s':''));
+                toSend.push('• ' + '<@' + p.playerId + '> : ' + p.bestScore + ' / ' + gameLength + ' ligne'+(p.bestScore>1?'s':'')+' correcte'+(p.bestScore>1?'s':'')+ ' en ' + p.tries + ' tentative' + (p.tries>1?'s':''));
             });
             this.send(toSend, channelId);
         }
@@ -267,7 +286,7 @@ class SedChallenge extends AssistantFeature {
     /******** STATES *********/
 
     onInit(event, from, to) {
-        var fromUser = this.interface.getDataStore().getUserById(this.context.userId),
+        let fromUser = this.interface.getDataStore().getUserById(this.context.userId),
             imPlayerId = this.interface.getDataStore().getDMByUserId(this.context.userId).id;
         if(!fromUser.is_admin
             && !this.interface.isAdministrator(this.context.userId)
@@ -282,7 +301,6 @@ class SedChallenge extends AssistantFeature {
     }
 
     onHelp(event, from, to) {
-        try{
         this.getGameToDisplay()
             .then((data) => {
                 var toSend = data.toSend;
@@ -291,11 +309,7 @@ class SedChallenge extends AssistantFeature {
                 toSend.push('Le premier à trouver une bonne réponse remporte le challenge !')
                 this.send(toSend);
                 this.wait();
-            })
-        }
-        catch(e) {
-            console.error(e);
-        }
+            });
     }
 
     onWait(event, from, to) {
@@ -310,9 +324,9 @@ class SedChallenge extends AssistantFeature {
 
     onAnswer(event, from, to, text, playerId) {
         console.log('BEGIN ###################################################');
-        console.log('ANSWER', playerId, text);
+        console.log('ANSWER', playerId, JSON.stringify(text));
         try {
-        var imPlayerId = this.interface.getDataStore().getDMByUserId(playerId).id;
+        let imPlayerId = this.interface.getDataStore().getDMByUserId(playerId).id;
         this.send('Vérifions ...', imPlayerId);
 
         if(!this.context.model.players[playerId]) {
@@ -325,19 +339,20 @@ class SedChallenge extends AssistantFeature {
             this.send('Vous avez déjà gagné ! Retournez travailler !', imPlayerId);
         }
         else {
-            console.log('onAnswer', 'testTEXT', text);
+            console.log('onAnswer', 'testTEXT', JSON.stringify(text));
             if(text) {
                 this.context.model.players[playerId].tries++;
-                var gameToDisplay = this.getGameToDisplay(text);
+                let gameToDisplay = this.getGameToDisplay(text);
                 gameToDisplay.then((gameToDisplayResult) => {
                     if(gameToDisplayResult.valid) {
+                        this.context.model.players[playerId].bestScore = gameToDisplayResult.validCount;
                         this.context.model.players[playerId].bestAnswer = text;
-                        var lastWinner = _.maxBy(this.getPlayersArray(), 'win');
+                        let lastWinner = _.maxBy(this.getPlayersArray(), 'win');
                         this.context.model.players[playerId].win = lastWinner ? lastWinner.win + 1 : 1;
                         this.send('Bravo, vous avez trouvé une bonne réponse !', imPlayerId);
 
-                        var bestPlayersByScore = _.chain(this.getPlayersArray())
-                                .orderBy(['win'], ['asc'])
+                        let bestPlayersByScore = _.chain(this.getPlayersArray())
+                                .orderBy(['win', 'bestScore'], ['asc', 'desc'])
                                 .value(),
                             toSend = [
                                 'Un joueur a trouvé la bonne réponse !'
@@ -355,11 +370,39 @@ class SedChallenge extends AssistantFeature {
                         }
                     }
                     else {
-                        var toSend = gameToDisplayResult.toSend,
-                            validCount = gameToDisplayResult.valid;
+                        let toSend = gameToDisplayResult.toSend,
+                            validCount = gameToDisplayResult.validCount;
 
+                        let bestPlayersByScoreBefore = this._getScoreBoard();
+                        if(this.context.model.players[playerId].bestScore === undefined 
+                            || this.context.model.players[playerId].bestScore < validCount) {
+                            this.context.model.players[playerId].bestScore = validCount;
+                            this.context.model.players[playerId].bestAnswer = text;
+                        }
+
+                        let bestPlayersByScoreAfter = this._getScoreBoard(),
+                            sameScoreboard = (bestPlayersByScoreBefore.length === bestPlayersByScoreAfter.length);
+                        if(sameScoreboard) {
+                            _.forEach(bestPlayersByScoreBefore, function(player, i) {
+                                let otherScoreboardPlayer = bestPlayersByScoreAfter[i];
+                                sameScoreboard = sameScoreboard &&
+                                    otherScoreboardPlayer &&
+                                    otherScoreboardPlayer.playerId === player.playerId &&
+                                    otherScoreboardPlayer.bestScore === player.bestScore;
+                            });
+                        }
+
+                        let myScore = _.find(bestPlayersByScoreAfter, {playerId: playerId}),
+                            myPosition = _.indexOf(bestPlayersByScoreAfter, myScore) + 1,
+                            game = this._getGame().game,
+                            gameLength = this._getGameSplitted(game.input).length;
+
+                        toSend.push('Cette réponse vous place en position ' + myPosition + ' du classement, avec ' + validCount + ' ligne'+(validCount>1?'s':'')+' correcte'+(validCount>1?'s':'')+ ' sur ' + gameLength);
                         this.send(toSend, imPlayerId);
-                        this.displayScoreboard();
+
+                        if(!sameScoreboard) {
+                            this.displayScoreboard();
+                        }
                     }
                     console.log('END ###################################################');
                     this.wait();
@@ -381,7 +424,7 @@ class SedChallenge extends AssistantFeature {
 
     onleaveWait(event, from, to, fromUserId) {
         if(event === 'end' && fromUserId) {
-            var fromUser = this.interface.getDataStore().getUserById(fromUserId),
+            let fromUser = this.interface.getDataStore().getUserById(fromUserId),
                 imPlayerId = this.interface.getDataStore().getDMByUserId(fromUserId).id;
             if(!fromUser.is_admin
                 && !this.interface.isAdministrator(this.context.userId)
@@ -393,20 +436,21 @@ class SedChallenge extends AssistantFeature {
     }
 
     onEnd(event, from, to) {
-        var bestPlayersByScore = _.chain(this.getPlayersArray())
-                .orderBy(['win'], ['asc'])
+        let bestPlayersByScore = _.chain(this.getPlayersArray())
+                .orderBy(['win', 'bestScore'], ['asc', 'desc'])
                 .value(),
-            gameLength = this._getGame().game.length,
+            game = this._getGame().game,
+            gameLength = this._getGameSplitted(game.input).length,
             toSend = [
                 'Challenge terminé !'
             ];
         if(bestPlayersByScore.length > 0) {
             _.forEach(bestPlayersByScore, function(player) {
                 if(player.win !== undefined) {
-                    toSend.push('<@' + player.playerId + '> remporte le challenge avec le script suivant : `' + player.bestAnswer + '` en ' + player.tries + ' tentative' + (player.tries>1?'s':''));
+                    toSend.push('<@' + player.playerId + '> remporte le challenge avec le script suivant : ```' + player.bestAnswer + '``` en ' + player.tries + ' tentative' + (player.tries>1?'s':''));
                 }
                 else {
-                    toSend.push('<@' + player.playerId + '> termine le script suivant : `' + player.bestAnswer + '` en ' + player.tries + ' tentative' + (player.tries>1?'s':''));
+                    toSend.push('<@' + player.playerId + '> termine avec un score de ' + player.bestScore + '/' + gameLength + ' ligne'+(player.bestScore>1?'s':'')+' correcte'+(player.bestScore>1?'s':'')+' en ' + player.tries + ' tentative' + (player.tries>1?'s':''));
                 }
             })
         }
