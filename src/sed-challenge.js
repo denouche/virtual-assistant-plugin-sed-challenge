@@ -271,7 +271,7 @@ class SedChallenge extends AssistantFeature {
     displayScoreboard(channelId) {
         let toSend = [],
             game = this._getGame().game,
-            gameLength = this._getGameSplitted(game.input).length,
+            gameLength = this._getGameSplitted(game.output).length,
             bestPlayersByScore = this._getScoreBoard();
         if(bestPlayersByScore.length > 0) {
             toSend.push('Voici le tableau de score actuel :');
@@ -395,7 +395,7 @@ class SedChallenge extends AssistantFeature {
                         let myScore = _.find(bestPlayersByScoreAfter, {playerId: playerId}),
                             myPosition = _.indexOf(bestPlayersByScoreAfter, myScore) + 1,
                             game = this._getGame().game,
-                            gameLength = this._getGameSplitted(game.input).length;
+                            gameLength = this._getGameSplitted(game.output).length;
 
                         toSend.push('Cette réponse vous place en position ' + myPosition + ' du classement, avec ' + validCount + ' ligne'+(validCount>1?'s':'')+' correcte'+(validCount>1?'s':'')+ ' sur ' + gameLength);
                         this.send(toSend, imPlayerId);
@@ -440,7 +440,7 @@ class SedChallenge extends AssistantFeature {
                 .orderBy(['win', 'bestScore'], ['asc', 'desc'])
                 .value(),
             game = this._getGame().game,
-            gameLength = this._getGameSplitted(game.input).length,
+            gameLength = this._getGameSplitted(game.output).length,
             toSend = [
                 'Challenge terminé !'
             ];
