@@ -13,10 +13,6 @@ const VirtualAssistant = require('virtual-assistant').VirtualAssistant,
 
 class SedChallenge extends AssistantFeature {
 
-    static getScope() {
-        return AssistantFeature.scopes.GLOBAL;
-    }
-
     static getTriggerKeywords() {
         return [
             'sed', 'stream editor'
