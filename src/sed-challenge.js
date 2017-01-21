@@ -1,4 +1,5 @@
-const AssistantFeature = require('virtual-assistant').AssistantFeature,
+const VirtualAssistant = require('virtual-assistant').VirtualAssistant,
+    AssistantFeature = require('virtual-assistant').AssistantFeature,
     ConfigurationService = require('virtual-assistant').ConfigurationService,
     StateMachine = require('javascript-state-machine'),
     _ = require('lodash'),
@@ -58,6 +59,23 @@ class SedChallenge extends AssistantFeature {
                 { name: 'end', from: '*', to: 'End' },
             ]
         });
+
+        let channelOrGroup = this.interface.getDataStore().getChannelById(this.context.channelId) || this.interface.getDataStore().getGroupById(this.context.channelId);
+        if(channelOrGroup) {
+            // Challenge was launched on a public channel or in a group
+            channelOrGroup.members.forEach((member) => {
+                this.interface.getDMIdByUserId(member)
+                    .then((imId) => {
+                        VirtualAssistant.getUsersCache().put(imId, this.id)
+                        this.send([
+                            `Bonjour, un Challenge sed vient d'être lancé sur <#${channelOrGroup.id}|${channelOrGroup.name}>.`,
+                            "Vous avez rejoint le challenge. Pour le quitter dites 'fin'"
+                        ], imId);
+                    }, (err) => {
+                        // Do nothing, error
+                    });
+            });
+        }
 
         // context is : 
         // { 
@@ -206,13 +224,16 @@ class SedChallenge extends AssistantFeature {
         if(sedScript) {
             return this._evaluateSedScript(game.game.input, sedScript)
                 .then((output) => {
-                    let valid = game.game.output === output;
+                    let valid = (game.game.output === output
+                        || game.game.output + '\n' === output);
 
                     let wantedOutputLineArray = this._getGameSplitted(game.game.output),
                         outputLineArray = this._getGameSplitted(output),
                         equalsLinesCount = 0;
                     _.forEach(wantedOutputLineArray, function(value, i) {
-                        if(i < outputLineArray.length && value === outputLineArray[i]) {
+                        if(i < outputLineArray.length 
+                            && (value === outputLineArray[i])
+                                || (i === (wantedOutputLineArray.length - 1) && (value + '\n') === outputLineArray[i])) {
                             equalsLinesCount++;
                         }
                     });
@@ -429,7 +450,8 @@ class SedChallenge extends AssistantFeature {
             if(!fromUser.is_admin
                 && !this.interface.isAdministrator(this.context.userId)
                 && imPlayerId !== this.context.channelId /* playing alone in training mode */) {
-                this.send('Désolé, seul un administrateur peut mettre fin au challenge.');
+                this.send('Vous quittez le challenge.', imPlayerId);
+                VirtualAssistant.getUsersCache().del(imPlayerId, this.id);
                 return false;
             }
         }
