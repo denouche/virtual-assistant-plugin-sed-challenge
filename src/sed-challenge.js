@@ -334,8 +334,21 @@ class SedChallenge extends AssistantFeature {
     }
 
     onAnswerChannel(event, from, to, text, fromUserId, channelId) {
-        this.send('Merci de me faire vos propositions de réponse en *message privé* !', channelId);
-        this.displayScoreboard(channelId);
+        let fromUser = this.interface.getDataStore().getUserById(fromUserId),
+            imPlayerId = this.interface.getDataStore().getDMByUserId(fromUserId).id;
+        if(VirtualAssistant.getUsersCache().get(imPlayerId)) {
+            this.send('Merci de me faire vos propositions de réponse en *message privé* !', channelId);
+            this.displayScoreboard(channelId);
+        }
+        else {
+            // The user is in the channel but not in the challenge, add him
+            let channelOrGroup = this.interface.getDataStore().getChannelById(this.context.channelId) || this.interface.getDataStore().getGroupById(this.context.channelId);
+            VirtualAssistant.getUsersCache().put(imPlayerId, this.id);
+            this.send(`Bienvenue ${fromUser.name} dans ce Challenge sed.`);
+            this.send([
+                `Vous avez rejoint le challenge lancé sur <#${channelOrGroup.id}|${channelOrGroup.name}>. Pour le quitter dites 'fin'`
+            ], imPlayerId);
+        }
         this.wait();
     }
 
@@ -447,6 +460,7 @@ class SedChallenge extends AssistantFeature {
                 && !this.interface.isAdministrator(this.context.userId)
                 && imPlayerId !== this.context.channelId /* playing alone in training mode */) {
                 this.send('Vous quittez le challenge.', imPlayerId);
+                this.send(`${fromUser.name} a quitté le challenge.`);
                 VirtualAssistant.getUsersCache().del(imPlayerId, this.id);
                 return false;
             }
