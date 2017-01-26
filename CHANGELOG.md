@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="0.5.1"></a>
+## [0.5.1](https://github.com/denouche/virtual-assistant-plugin-sed-challenge/compare/v0.5.0...v0.5.1) (2017-01-26)
+
+
+### Bug Fixes
+
+* send start challenge to all people in initialization phase ([97fffcb](https://github.com/denouche/virtual-assistant-plugin-sed-challenge/commit/97fffcb))
+
+
+
 <a name="0.5.0"></a>
 # [0.5.0](https://github.com/denouche/virtual-assistant-plugin-sed-challenge/compare/v0.4.2...v0.5.0) (2017-01-25)
 
