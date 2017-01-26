@@ -56,23 +56,6 @@ class SedChallenge extends AssistantFeature {
             ]
         });
 
-        let channelOrGroup = this.interface.getDataStore().getChannelById(this.context.channelId) || this.interface.getDataStore().getGroupById(this.context.channelId);
-        if(channelOrGroup) {
-            // Challenge was launched on a public channel or in a group
-            channelOrGroup.members.forEach((member) => {
-                this.interface.getDMIdByUserId(member)
-                    .then((imId) => {
-                        VirtualAssistant.getUsersCache().put(imId, this.id)
-                        this.send([
-                            `Bonjour, un Challenge sed vient d'être lancé sur <#${channelOrGroup.id}|${channelOrGroup.name}>.`,
-                            "Vous avez rejoint le challenge. Pour le quitter dites 'fin'"
-                        ], imId);
-                    }, (err) => {
-                        // Do nothing, error
-                    });
-            });
-        }
-
         // context is : 
         // { 
         //  userId: xxx, // the user who launched the feature
@@ -314,6 +297,22 @@ class SedChallenge extends AssistantFeature {
         else {
             this.send("C'est parti pour le Challenge sed !");
             this.help();
+            let channelOrGroup = this.interface.getDataStore().getChannelById(this.context.channelId) || this.interface.getDataStore().getGroupById(this.context.channelId);
+            if(channelOrGroup) {
+                // Challenge was launched on a public channel or in a group
+                channelOrGroup.members.forEach((member) => {
+                    this.interface.getDMIdByUserId(member)
+                        .then((imId) => {
+                            VirtualAssistant.getUsersCache().put(imId, this.id)
+                            this.send([
+                                `Bonjour, un Challenge sed vient d'être lancé sur <#${channelOrGroup.id}|${channelOrGroup.name}>.`,
+                                "Vous avez rejoint le challenge. Pour le quitter dites 'fin'"
+                            ], imId);
+                        }, (err) => {
+                            // Do nothing, error
+                        });
+                });
+            }
         }
     }
 
