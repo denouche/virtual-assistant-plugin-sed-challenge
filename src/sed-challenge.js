@@ -152,15 +152,17 @@ class SedChallenge extends AssistantFeature {
 
     _evaluateSedScript(input, sedScript) {
         let filename = this._generateRandomFilename(),
-            fullTempFilePath = path.join('/tmp/', filename);
+            fullTempFilePath = path.join('/tmp/', filename),
+            killed = false;
         fs.writeFileSync(fullTempFilePath, sedScript);
-        return spawn('sed', _.concat(this._getGame().sedOptions, '-f', fullTempFilePath, '--version'), { capture: [ 'stderr' ]})
+        return spawn('sed', _.concat(this._getGame().sedOptions, '-f', fullTempFilePath, '--version'), { capture: [ 'stderr' ] })
             .then(() => {
                 // No error in sed script, let's apply to the input
                 return spawn('echo', ['-n', input], { capture: [ 'stdout', 'stderr' ]});
             })
             .then((input) => {
-                let sed = spawn('sed', _.concat(this._getGame().sedOptions, '-f', fullTempFilePath), { capture: [ 'stdout', 'stderr' ]});
+                let sed = spawn('sed', _.concat(this._getGame().sedOptions, '-f', fullTempFilePath), { capture: [ 'stdout', 'stderr' ] });
+                setTimeout(function(){ killed = true; sed.childProcess.kill()}, 500);
                 sed.childProcess.stdin.write(new Buffer(input.stdout.toString()));
                 sed.childProcess.stdin.end();
                 return sed;
@@ -171,6 +173,9 @@ class SedChallenge extends AssistantFeature {
             })
             .catch((err) => {
                 fs.removeSync(fullTempFilePath);
+                if(killed) {
+                    return Promise.reject({stderr: 'Evaluating you script took too much time, please check for infinite loops.'});
+                }
                 return Promise.reject(err);
             });
     }
