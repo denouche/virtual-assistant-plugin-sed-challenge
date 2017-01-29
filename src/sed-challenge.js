@@ -1,6 +1,7 @@
 const VirtualAssistant = require('virtual-assistant').VirtualAssistant,
     AssistantFeature = require('virtual-assistant').AssistantFeature,
     ConfigurationService = require('virtual-assistant').ConfigurationService,
+    Statistics = require('virtual-assistant').StatisticsService,
     StateMachine = require('javascript-state-machine'),
     _ = require('lodash'),
     vm = require('vm'),
@@ -12,6 +13,10 @@ const VirtualAssistant = require('virtual-assistant').VirtualAssistant,
 
 
 class SedChallenge extends AssistantFeature {
+
+    static init() {
+        Statistics.register('SED_END');
+    }
 
     static getTriggerKeywords() {
         return [
@@ -70,12 +75,14 @@ class SedChallenge extends AssistantFeature {
         //        win: 1
         //      }
         //    },
-        //    currentGame: undefined
+        //    currentGame: undefined,
+        //    currentGameName: undefined
         //  }
         // }
         this.context.model = {
             players: {},
-            currentGame: undefined
+            currentGame: undefined,
+            currentGameName: undefined
         };
     }
 
@@ -110,8 +117,10 @@ class SedChallenge extends AssistantFeature {
 
     _getGame() {
         if(!this.context.model.currentGame) {
-            let gameName = ConfigurationService.get('sedchallenge.game');
-            this.context.model.currentGame = undefined;
+            if(!this.context.model.currentGameName) {
+                this.context.model.currentGameName = ConfigurationService.get('sedchallenge.game');
+            }
+            let gameName = this.context.model.currentGameName;
             try {
                 this.context.model.currentGame = require(path.join(__dirname, `challenges/${gameName}.js`));
             } catch(e) {
@@ -479,7 +488,21 @@ class SedChallenge extends AssistantFeature {
             gameLength = this._getGameSplitted(game.output).length,
             toSend = [
                 'Challenge terminé !'
-            ];
+            ],
+            winnerCount = _.filter(bestPlayersByScore, function(e) {
+                return e.win !== undefined;
+            }),
+            launchedByImPlayerId = this.interface.getDataStore().getDMByUserId(this.context.userId).id;
+
+        Statistics.event(Statistics.events.SED_END, {
+            challengeId: this.id,
+            game: this.context.model.currentGameName,
+            userId: this.context.userId,
+            winnersCount: winnerCount.length,
+            playersCount: bestPlayersByScore.length,
+            privateChallenge: (launchedByImPlayerId === this.context.channelId)
+        });
+
         if(bestPlayersByScore.length > 0) {
             _.forEach(bestPlayersByScore, function(player) {
                 if(player.win !== undefined) {
