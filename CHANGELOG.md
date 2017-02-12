@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="0.6.1"></a>
+## [0.6.1](https://github.com/denouche/virtual-assistant-plugin-sed-challenge/compare/v0.6.0...v0.6.1) (2017-02-12)
+
+
+### Bug Fixes
+
+* use the inherited debug function ([c3aca3f](https://github.com/denouche/virtual-assistant-plugin-sed-challenge/commit/c3aca3f))
+
+
+
 <a name="0.6.0"></a>
 # [0.6.0](https://github.com/denouche/virtual-assistant-plugin-sed-challenge/compare/v0.5.3...v0.6.0) (2017-01-29)
 
