@@ -5,7 +5,6 @@ const VirtualAssistant = require('virtual-assistant').VirtualAssistant,
     StateMachine = require('javascript-state-machine'),
     _ = require('lodash'),
     vm = require('vm'),
-    debug = require('debug')('virtual-assistant-plugin-sed-challenge:feature:sed'),
     path = require('path'),
     fs = require('fs-extra'),
     crypto = require('crypto'),
@@ -39,8 +38,8 @@ class SedChallenge extends AssistantFeature {
         StateMachine.create({
             target: SedChallenge.prototype,
             error: function(eventName, from, to, args, errorCode, errorMessage) {
-                debug('Uncatched error',  'event ' + eventName + ' was naughty :- ' + errorMessage);
-                debug(args);
+                this.debug('Uncatched error',  'event ' + eventName + ' was naughty :- ' + errorMessage);
+                this.debug(args);
             },
             initial: { state: 'Init', event: 'startup', defer: true }, // defer is important since the startup event is launched after the fsm is stored in cache
             terminal: 'End',
@@ -124,7 +123,7 @@ class SedChallenge extends AssistantFeature {
             try {
                 this.context.model.currentGame = require(path.join(__dirname, `challenges/${gameName}.js`));
             } catch(e) {
-                debug(`Error while loading sed game ${gameName}`);
+                this.debug(`Error while loading sed game ${gameName}`);
                 let toSend = [`Une erreur est survenue, le jeu à charger *${gameName}* n'existe pas.`];
                 let files = fs.walkSync(path.join(__dirname, 'challenges'));
                 toSend.push("Pour configurer le challenge en cours, utilisez le mode configuration et affectez l'une des valeurs suivantes à la propriété `sedchallenge.game` :");
@@ -366,8 +365,8 @@ class SedChallenge extends AssistantFeature {
     }
 
     onAnswer(event, from, to, text, playerId) {
-        debug('BEGIN ###################################################');
-        debug('ANSWER', playerId, JSON.stringify(text));
+        this.debug('BEGIN ###################################################');
+        this.debug('ANSWER', playerId, JSON.stringify(text));
         try {
         let imPlayerId = this.interface.getDataStore().getDMByUserId(playerId).id;
         this.send('Vérifions ...', imPlayerId);
@@ -382,7 +381,7 @@ class SedChallenge extends AssistantFeature {
             this.send('Vous avez déjà gagné ! Retournez travailler !', imPlayerId);
         }
         else {
-            debug('onAnswer', 'testTEXT', JSON.stringify(text));
+            this.debug('onAnswer', 'testTEXT', JSON.stringify(text));
             if(text) {
                 this.context.model.players[playerId].tries++;
                 let gameToDisplay = this.getGameToDisplay(text);
@@ -447,21 +446,21 @@ class SedChallenge extends AssistantFeature {
                             this.displayScoreboard();
                         }
                     }
-                    debug('END ###################################################');
+                    this.debug('END ###################################################');
                     this.wait();
                 })
                 .catch((error) => {
                     this.send(error.toSend, imPlayerId);
-                    debug('END ###################################################');
+                    this.debug('END ###################################################');
                     this.wait();
                 });
             }
         }
         }
         catch(e) {
-            debug('------------------------------------------')
-            debug('onAnswer error', e);
-            debug('------------------------------------------')
+            this.debug('------------------------------------------')
+            this.debug('onAnswer error', e);
+            this.debug('------------------------------------------')
         }
     }
 
