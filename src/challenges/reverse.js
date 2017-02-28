@@ -20,6 +20,6 @@ module.exports = {
         output: output
     },
     sedOptions: [
-    	//'-n'
+    	'-n'
     ]
 };

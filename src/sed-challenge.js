@@ -46,7 +46,9 @@ class SedChallenge extends AssistantFeature {
             events: [
                 { name: 'startup', from: 'none',   to: 'Init' },
 
-                { name: 'help', from: 'Init',   to: 'Help' },
+                { name: 'text', from: 'Init',   to: 'ChallengeChosen' },
+
+                { name: 'help', from: 'ChallengeChosen',   to: 'Help' },
 
                 { name: 'wait', from: 'Help',   to: 'Wait' },
 
@@ -114,6 +116,18 @@ class SedChallenge extends AssistantFeature {
 
     /************ HELPERS *****************/
 
+    getAvailableGames() {
+        let results = [];
+        let files = fs.walkSync(path.join(__dirname, 'challenges'));
+        files.forEach(function(f) {
+            let matcher = f.match(new RegExp('^' + path.join(__dirname, 'challenges') + '/(.+)\.js$'))
+            if(matcher && matcher[1]) {
+                results.push(matcher[1]);
+            }
+        });
+        return results;
+    }
+
     _getGame() {
         if(!this.context.model.currentGame) {
             if(!this.context.model.currentGameName) {
@@ -125,13 +139,9 @@ class SedChallenge extends AssistantFeature {
             } catch(e) {
                 this.debug(`Error while loading sed game ${gameName}`);
                 let toSend = [`Une erreur est survenue, le jeu à charger *${gameName}* n'existe pas.`];
-                let files = fs.walkSync(path.join(__dirname, 'challenges'));
                 toSend.push("Pour configurer le challenge en cours, utilisez le mode configuration et affectez l'une des valeurs suivantes à la propriété `sedchallenge.game` :");
-                files.forEach(function(f) {
-                    let matcher = f.match(new RegExp('^' + path.join(__dirname, 'challenges') + '/(.+)\.js$'))
-                    if(matcher && matcher[1]) {
-                        toSend.push('`' + matcher[1] + '`');
-                    }
+                this.getAvailableGames().forEach(function(g) {
+                    toSend.push('`' + matcher[1] + '`');
                 });
                 this.send(toSend);
                 this.send('Fin du challenge.');
@@ -296,7 +306,7 @@ class SedChallenge extends AssistantFeature {
     }
 
 
-    /******** STATES *********/
+    /**************** STATES *****************/
 
     onInit(event, from, to) {
         let fromUser = this.interface.getDataStore().getUserById(this.context.userId),
@@ -309,24 +319,47 @@ class SedChallenge extends AssistantFeature {
         }
         else {
             this.send("C'est parti pour le Challenge sed !");
-            this.help();
-            let channelOrGroup = this.interface.getDataStore().getChannelById(this.context.channelId) || this.interface.getDataStore().getGroupById(this.context.channelId);
-            if(channelOrGroup) {
-                // Challenge was launched on a public channel or in a group
-                channelOrGroup.members.forEach((member) => {
-                    this.interface.getDMIdByUserId(member)
-                        .then((imId) => {
-                            VirtualAssistant.getUsersCache().put(imId, this.id)
-                            this.send([
-                                `Bonjour, un Challenge sed vient d'être lancé sur <#${channelOrGroup.id}|${channelOrGroup.name}>.`,
-                                "Vous avez rejoint le challenge. Pour le quitter dites 'fin'"
-                            ], imId);
-                        }, (err) => {
-                            // Do nothing, error
-                        });
-                });
-            }
+            let games = this.getAvailableGames(),
+                toSend = [];
+
+            toSend.push('Voici les challenges disponibles :');
+            games.forEach(function(g) {
+                toSend.push('`' + g + '`');
+            });
+            toSend.push('Quel challenge voulez-vous lancer ?');
+            this.send(toSend);
         }
+    }
+
+    onleaveInit(event, from, to, text) {
+        let gameName = text.trim();
+        try {
+            require(`./challenges/${gameName}.js`); // try to load the given game
+            this.context.model.currentGameName = gameName;
+        } catch(e) {
+            this.send(`Une erreur est survenue, le jeu à charger *${gameName}* n'existe pas.`);
+            return false;
+        }
+    }
+
+    onChallengeChosen(event, from, to) {
+        let channelOrGroup = this.interface.getDataStore().getChannelById(this.context.channelId) || this.interface.getDataStore().getGroupById(this.context.channelId);
+        if(channelOrGroup) {
+            // Challenge was launched on a public channel or in a group
+            channelOrGroup.members.forEach((member) => {
+                this.interface.getDMIdByUserId(member)
+                    .then((imId) => {
+                        VirtualAssistant.getUsersCache().put(imId, this.id)
+                        this.send([
+                            `Bonjour, un Challenge sed vient d'être lancé sur <#${channelOrGroup.id}|${channelOrGroup.name}>.`,
+                            "Vous avez rejoint le challenge. Pour le quitter dites 'fin'"
+                        ], imId);
+                    }, (err) => {
+                        // Do nothing, error
+                    });
+            });
+        }
+        this.help();
     }
 
     onHelp(event, from, to) {
